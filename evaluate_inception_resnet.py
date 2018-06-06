@@ -1,6 +1,8 @@
 import numpy as np
 import argparse
 from path import Path
+import _pickle as cPickle
+import gzip
 
 from keras.models import Model
 from keras.layers import Dense, Dropout
@@ -24,6 +26,9 @@ parser.add_argument('-resize', type=str, default='false',
 parser.add_argument('-rank', type=str, default='true',
                     help='Whether to tank the images after they have been scored')
 
+parser.add_argument('-out', type=str, default=None,
+                    help='save the result to file')
+
 args = parser.parse_args()
 resize_image = args.resize.lower() in ("true", "yes", "t", "1")
 target_size = (224, 224) if resize_image else None
@@ -43,6 +48,9 @@ elif args.img[0] is not None:
 else:
     raise RuntimeError('Either -dir or -img arguments must be passed as argument')
 
+if args.out is None:
+    raise RuntimeError('Please specify the output')
+
 with tf.device('/CPU:0'):
     base_model = InceptionResNetV2(input_shape=(None, None, 3), include_top=False, pooling='avg', weights=None)
     x = Dropout(0.75)(base_model.output)
@@ -51,10 +59,15 @@ with tf.device('/CPU:0'):
     model = Model(base_model.input, x)
     model.load_weights('weights/inception_resnet_weights.h5')
 
-    score_list = []
+    score_list = dict()
 
     for img_path in imgs:
-        img = load_img(img_path, target_size=target_size)
+        try:
+            img = load_img(img_path, target_size=target_size)
+        except OSError:
+            print("skip the image {}".format(img_path))
+            continue
+
         x = img_to_array(img)
         x = np.expand_dims(x, axis=0)
 
@@ -66,11 +79,16 @@ with tf.device('/CPU:0'):
         std = std_score(scores)
 
         file_name = Path(img_path).name.lower()
-        score_list.append((file_name, mean))
+        # score_list.append((file_name, mean))
+        score_list.update({file_name: mean})
 
         print("Evaluating : ", img_path)
         print("NIMA Score : %0.3f +- (%0.3f)" % (mean, std))
         print()
+
+    print("Writing to the file")
+    f = gzip.open(args.out)
+    cPickle.dump(score_list, f)
 
     if rank_images:
         print("*" * 40, "Ranking Images", "*" * 40)
@@ -78,5 +96,6 @@ with tf.device('/CPU:0'):
 
         for i, (name, score) in enumerate(score_list):
             print("%d)" % (i + 1), "%s : Score = %0.5f" % (name, score))
+
 
 
