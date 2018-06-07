@@ -51,7 +51,7 @@ else:
 if args.out is None:
     raise RuntimeError('Please specify the output')
 
-with tf.device('/CPU:0'):
+with tf.device('/GPU:0'):
     base_model = InceptionResNetV2(input_shape=(None, None, 3), include_top=False, pooling='avg', weights=None)
     x = Dropout(0.75)(base_model.output)
     x = Dense(10, activation='softmax')(x)
@@ -60,18 +60,27 @@ with tf.device('/CPU:0'):
     model.load_weights('weights/inception_resnet_weights.h5')
 
     score_list = dict()
+    # imgs = imgs[2678:]
+    for idx, img_path in enumerate(imgs):
+        print("Processing {}/{}".format(idx, len(imgs)))
 
-    for img_path in imgs:
         try:
             img = load_img(img_path, target_size=target_size)
-        except OSError:
+        except (ImportError, ValueError, OSError):
             print("skip the image {}".format(img_path))
             continue
+        try:
+            img.load()
+        except Exception:
+            print("skip the image {}".format(img_path))
+            continue
+
 
         x = img_to_array(img)
         x = np.expand_dims(x, axis=0)
 
         x = preprocess_input(x)
+        # print("x shape = {}".format(x.shape))
 
         scores = model.predict(x, batch_size=1, verbose=0)[0]
 
