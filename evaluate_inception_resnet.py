@@ -89,15 +89,16 @@ with tf.device('/GPU:0'):
 
         file_name = Path(img_path).name.lower()
         # score_list.append((file_name, mean))
-        score_list.update({file_name: mean})
+        score_list.update({file_name: [mean, std]})
 
         print("Evaluating : ", img_path)
         print("NIMA Score : %0.3f +- (%0.3f)" % (mean, std))
         print()
 
     print("Writing to the file")
-    f = gzip.open(args.out)
+    f = gzip.open(args.out, "wb")
     cPickle.dump(score_list, f)
+    f.close()
 
     if rank_images:
         print("*" * 40, "Ranking Images", "*" * 40)
